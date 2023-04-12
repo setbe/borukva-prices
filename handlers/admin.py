@@ -2,8 +2,20 @@ from aiogram import Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher.filters import Text
-from borukva_bot import get_all_items, insert_item, delete_item, Item, get_item, sort_items
+from borukva_bot import *
 
+
+def check_admin_decorator(func):
+    def inner(msg: types.Message):
+        if is_admin(str(msg.from_id)):
+            return func(msg)
+        return do_nothing_handler
+    return inner
+
+async def do_nothing_handler(msg: types.Message):
+    pass
+
+# хендлери предметів
 class ItemState(StatesGroup):
     icon = State()
     name = State()
@@ -11,9 +23,10 @@ class ItemState(StatesGroup):
     min_price = State()
     max_price = State()
 
+@check_admin_decorator
 async def add_item_start_handler(msg: types.Message):
     await ItemState.icon.set()
-    await msg.reply('Завантажте зображення.')
+    await msg.reply('Завантажте зображення (зі стисненням)')
 
 async def load_icon_handler(msg: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -54,35 +67,46 @@ async def cancel_handler(msg: types.Message, state: FSMContext):
     await state.finish()
     await msg.reply('Добре, скасовано.')
 
+@check_admin_decorator
 async def all_handler(msg: types.Message):
     l = get_all_items()
     await msg.reply(str(l))
 
+@check_admin_decorator
 async def remove_item_handler(msg: types.Message):
     try:
-        code = int(msg.text.split(' ')[-1])
-        delete_item(code)
+        arg = msg.text.split(' ')[-1]
+        if arg.isnumeric():
+            code = int(msg.text.split(' ')[-1])
+            delete_item(code)
+        else:
+            item = Item.find_by_name(arg, 0.7)
+            if item:
+                delete_item(item.code)
         await msg.reply('Видалено!')
         sort_items()
-    except ValueError:
-        await msg.reply('Після "Видалити" треба писати код товару! (код це число)')
+    except:
+        await msg.reply('Не вдалося видалити предмет')
 
-async def get_item_handler(msg: types.Message):
-    try:
-        code = int(msg.text.split(' ')[-1])
-        item = get_item(code)
-        await msg.reply_photo(item.icon, caption=f'{item.amount} - "{item.name}". Мін-макс. ціна: {item.min_price}-{item.max_price}')
-    except ValueError:
-        await msg.reply('Після "Товар" треба писати код товару! (код це число)')
+# хендлери адмінів
 
+async def all_admins_handler(msg: types.Message):
+    l = get_all_admins()
+    await msg.reply(str(l))
+
+@check_admin_decorator
+async def add_admin_handler(msg: types.Message):
+    print(msg.text)
+    args = msg.text.split(' ')
+    insert_admin(args[-2], args[-1])
+    await msg.reply(f"Доданий адмін на ім'я: {args[-1]}, з айді: {args[-2]}")
 
 def register_admin_handlers(dp: Dispatcher):
-    dp.register_message_handler(remove_item_handler, Text(startswith='видалити', ignore_case=True))
-
-    dp.register_message_handler(get_item_handler, Text(startswith='товар', ignore_case=True))
+    dp.register_message_handler(all_admins_handler, Text(equals='адміни', ignore_case=True))
+    dp.register_message_handler(add_admin_handler, Text(startswith='новий адмін', ignore_case=True))
     
+    dp.register_message_handler(remove_item_handler, Text(startswith='видалити', ignore_case=True))
     dp.register_message_handler(all_handler, Text(equals='все', ignore_case=True))
-
     dp.register_message_handler(cancel_handler, state='*', commands='скасувати')
     dp.register_message_handler(cancel_handler, Text(equals='скасувати', ignore_case=True), state='*')
 
