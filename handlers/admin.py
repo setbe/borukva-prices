@@ -3,6 +3,8 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher.filters import Text
 from borukva_bot import *
+from item import *
+from shop import *
 
 
 def check_admin_decorator(func):
@@ -53,7 +55,7 @@ async def set_max_price_handler(msg: types.Message, state: FSMContext):
         data['max_price'] = int(msg.text)
     async with state.proxy() as data:
         item = Item(data['icon'], data['name'], data['amount'], data['min_price'], data['max_price'])
-        insert_item(item)
+        item.insert()
     await state.finish()
 
 async def cancel_handler(msg: types.Message, state: FSMContext):
@@ -65,7 +67,7 @@ async def cancel_handler(msg: types.Message, state: FSMContext):
 
 @check_admin_decorator
 async def all_handler(msg: types.Message):
-    all_items = get_all_items()
+    all_items = Item.all()
     await msg.reply(str(all_items))
 
 @check_admin_decorator
@@ -74,39 +76,110 @@ async def remove_item_handler(msg: types.Message):
         arg = msg.text.split(' ')[-1]
         if arg.isnumeric():
             code = int(msg.text.split(' ')[-1])
-            delete_item(code)
+            Item.delete(code)
         else:
-            item = Item.find_by_name(arg, 0.7)
+            text = msg.text.split(' ')[1:]
+            text = ' '.join(text)
+            item = Item.find_by_name(text, 0.7)
             if item:
-                delete_item(item.code)
+                Item.delete(item.code)
         await msg.reply('Видалено!')
-        sort_items()
+        Item.sort()
     except:
         await msg.reply('Не вдалося видалити предмет')
 
 # хендлери адмінів
 @check_admin_decorator
 async def all_admins_handler(msg: types.Message):
-    l = get_all_admins()
-    await msg.reply(str(l))
+    admins_list = get_all_admins()
+    await msg.reply(str(admins_list))
 
 @check_admin_decorator
 async def add_admin_handler(msg: types.Message):
-    print(msg.text)
     args = msg.text.split(' ')
     insert_admin(args[-2], args[-1])
     await msg.reply(f"Доданий адмін на ім'я: {args[-1]}, з айді: {args[-2]}")
 
+@check_admin_decorator
+async def remove_admin_handler(msg: types.Message):
+    args = msg.text.split(' ')
+    delete_admin(args[-1])
+    await msg.reply("Адмін видалений!")
+
+# хендлери магазинів
+@check_admin_decorator
+async def all_shops_handler(msg: types.Message):
+    shops_list = Shop.all()
+    await msg.reply(str(shops_list))
+
+@check_admin_decorator
+async def remove_shop_handler(msg: types.Message):
+    text = msg.text.split(' ')[1:]
+    text = ' '.join(text)
+
+    if text.isnumeric():
+        id = int(msg.text.split(' ')[-1])
+        Shop.delete(id)
+    else:
+        shop = Shop.find_by_name(text, 0.7)
+        if shop:
+            Shop.delete(shop.id)
+    await msg.reply('Видалено!')
+
+
+class ShopCreatingState(StatesGroup):
+    name = State()
+    owner_id = State()
+    owner_name = State()
+
+@check_admin_decorator
+async def create_shop_start_handler(msg: types.Message):
+    await ShopCreatingState.name.set()
+    await msg.reply('Назва магазину?')
+
+async def set_shop_name_handler(msg: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['name'] = msg.text
+    await ShopCreatingState.next()
+    await msg.reply('Власник? (айді користувача в тґ)')
+
+async def set_shop_owner_id_handler(msg: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['owner_id'] = msg.text
+    await ShopCreatingState.next()
+    await msg.reply("Власник? (ім'я користувача в тґ)")
+
+async def set_shop_owner_name_handler(msg: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['owner_name'] = msg.text
+    async with state.proxy() as data:
+        owner = Owner(data['owner_id'], data['owner_name'])
+        try:
+            Shop.create(data['name'], owner.str())
+        except TypeError:
+            await msg.reply("У цього користувача вже є магазин")
+            await state.finish()
+    await state.finish()
+
 def register_admin_handlers(dp: Dispatcher):
+    dp.register_message_handler(create_shop_start_handler, Text(equals='+магазин', ignore_case=True), state=None)
+    dp.register_message_handler(set_shop_name_handler, state=ShopCreatingState.name)
+    dp.register_message_handler(set_shop_owner_id_handler, state=ShopCreatingState.owner_id)
+    dp.register_message_handler(set_shop_owner_name_handler, state=ShopCreatingState.owner_name)
+    
+    dp.register_message_handler(all_shops_handler, Text(equals='магазини', ignore_case=True))
+    dp.register_message_handler(remove_shop_handler, Text(startswith='-магазин', ignore_case=True))
+    
     dp.register_message_handler(all_admins_handler, Text(equals='адміни', ignore_case=True))
-    dp.register_message_handler(add_admin_handler, Text(startswith='новий адмін', ignore_case=True))
+    dp.register_message_handler(add_admin_handler, Text(startswith='+адмін', ignore_case=True))
+    dp.register_message_handler(remove_admin_handler, Text(startswith='-адмін', ignore_case=True))
     
     dp.register_message_handler(remove_item_handler, Text(startswith='видалити', ignore_case=True))
     dp.register_message_handler(all_handler, Text(equals='все', ignore_case=True))
-    dp.register_message_handler(cancel_handler, state='*', commands='скасувати')
+    #dp.register_message_handler(cancel_handler, state='*', commands='скасувати')
     dp.register_message_handler(cancel_handler, Text(equals='скасувати', ignore_case=True), state='*')
 
-    dp.register_message_handler(add_item_start_handler, state=None, commands='додати')
+    #dp.register_message_handler(add_item_start_handler, state=None, commands='додати')
     dp.register_message_handler(add_item_start_handler, Text(equals='додати', ignore_case=True), state=None)
     dp.register_message_handler(load_icon_handler, content_types=['photo'], state=ItemState.icon)
     dp.register_message_handler(name_item_handler, state=ItemState.name)
