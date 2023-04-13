@@ -169,8 +169,12 @@ def get_admin_id(name: str):
 
 def is_admin(id: str):
     with con:
-        cur.execute('SELECT * from admins where id=?', (id))
-    return cur.fetchone()
+        cur.execute('SELECT * from admins where id=?', (id, ))
+    admin = cur.fetchone()
+    if admin:
+        if admin[0] == id:
+            return True
+    return False
 
 
 # операції з магазинами

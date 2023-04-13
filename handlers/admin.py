@@ -6,14 +6,10 @@ from borukva_bot import *
 
 
 def check_admin_decorator(func):
-    def inner(msg: types.Message):
-        if is_admin(str(msg.from_id)):
-            return func(msg)
-        return do_nothing_handler
+    async def inner(msg: types.Message):
+        if is_admin(str(msg.from_user.id)):
+            await func(msg)
     return inner
-
-async def do_nothing_handler(msg: types.Message):
-    pass
 
 # хендлери предметів
 class ItemState(StatesGroup):
@@ -69,8 +65,8 @@ async def cancel_handler(msg: types.Message, state: FSMContext):
 
 @check_admin_decorator
 async def all_handler(msg: types.Message):
-    l = get_all_items()
-    await msg.reply(str(l))
+    all_items = get_all_items()
+    await msg.reply(str(all_items))
 
 @check_admin_decorator
 async def remove_item_handler(msg: types.Message):
@@ -89,7 +85,7 @@ async def remove_item_handler(msg: types.Message):
         await msg.reply('Не вдалося видалити предмет')
 
 # хендлери адмінів
-
+@check_admin_decorator
 async def all_admins_handler(msg: types.Message):
     l = get_all_admins()
     await msg.reply(str(l))
