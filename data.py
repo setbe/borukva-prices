@@ -49,8 +49,6 @@ cur = con.cursor()
 #                 id integer
 # )''')
 
-
-
 # операції з адмінами
 def get_all_admins():
     with con:

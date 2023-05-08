@@ -33,11 +33,14 @@ class Shop():
         with con:
             cur.execute('SELECT id FROM shops')
         shops = cur.fetchall()
+        if not shops:
+            return 0
         j = 0
-        for i in range(len(shops)+1):
+        for i in range(len(shops)):
             if j != i:
                 return j
             j += 1
+        return len(Shop.names())
 
     @classmethod
     def all(cls):
@@ -54,13 +57,14 @@ class Shop():
     @classmethod
     def create(cls, name: str, owners: str):
         owner = Owner.dict(owners)
+        print(owner)
         if Shop.by_user_id(owner['id']):
             raise TypeError
         else:
-            id = len(Shop.names())
+            id = Shop.generate_id()
             with con:
                 cur.execute('INSERT INTO shops VALUES (?, ?, ?, ?, ?, ?)', ('', name, f'''Якось тут порожньо...
-                редагувати {str(id)} - для встановлення інформації.''', owners, '{}', id, ))
+редагувати {str(id)} - для встановлення інформації.''', owners, '{}', id, ))
 
     @classmethod
     def delete(cls, id: int):
@@ -69,7 +73,21 @@ class Shop():
 
     @classmethod
     def by_user_id(cls, id: str):
-        pass
+        res = []
+        with con:
+            cur.execute('SELECT owners, id FROM shops')
+        res = cur.fetchall()
+        for i, owner in enumerate(res):
+            owner = Owner.dict(owner[0])
+            if owner['id'] == id:
+                return Shop.by_id(res[i][1]) 
+        return None
+    
+    @classmethod
+    def by_id(cls, id: int):
+        with con:
+            cur.execute('SELECT * FROM shops WHERE id=?', (id, ))
+        return cur.fetchone()
 
     @classmethod
     def by_name(cls, name: str):
@@ -108,6 +126,7 @@ class Shop():
 Власник: {Owner.dict(self.owners)['name']}
 Айді магазину: {self.id}
 '''
+
 
 class Owner():
     def __init__(self, id='', name=''):
