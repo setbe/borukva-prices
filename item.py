@@ -105,8 +105,9 @@ class ItemList():
         with con:
             cur.execute('INSERT INTO lists VALUES (?, ?)', (self.name, self.items))
 
-    def push(self):
-        
+    def delete(self):
+        with con:
+            cur.execute('DELETE * FROM lists WHERE name=?', (self.name))
 
     @classmethod
     def from_data(cls, data):

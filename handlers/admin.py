@@ -33,6 +33,10 @@ async def load_icon_handler(msg: types.Message, state: FSMContext):
     await msg.reply('Назва?')
 
 async def name_item_handler(msg: types.Message, state: FSMContext):
+    if ';' in msg.text:
+        msg.reply('";" Не можна використовувати у назві')
+        return
+    
     async with state.proxy() as data:
         data['name'] = msg.text
     await ItemState.next()
@@ -121,7 +125,7 @@ async def remove_shop_handler(msg: types.Message):
         id = int(msg.text.split(' ')[-1])
         Shop.delete(id)
     else:
-        shop = Shop.find_by_name(text, 0.7)
+        shop = Shop.find_by_name(text, 0.9)
         if shop:
             Shop.delete(shop.id)
     await msg.reply('Магазин видалено!')
@@ -156,10 +160,12 @@ async def set_shop_owner_name_handler(msg: types.Message, state: FSMContext):
         owner = Owner(data['owner_id'], data['owner_name'])
         try:
             Shop.create(data['name'], owner.str())
+            await msg.reply("Магазин доданий")
         except TypeError:
             await msg.reply("У цього користувача вже є магазин")
             await state.finish()
-    await msg.reply("Магазин доданий")
+        except:
+            await msg.reply("Щось пішло не так під час створення")
     await state.finish()
 
 # хендлери для списків
@@ -171,41 +177,57 @@ async def all_lists_handler(msg: types.Message):
 
 @check_admin_decorator
 async def add_item_to_list_handler(msg: types.Message):
-    await ListState.name.set()
+    await ListState._class.set()
     await msg.reply('Назва списку?')
 
-async def set_list_name_handler(msg: types.Message, state: FSMContext):
+async def set_adding_items_to_list_handler(msg: types.Message, state: FSMContext):
     async with state.proxy() as data:
-        data['name'] = msg.text
-        if ItemList.find_by_name(data['name']):
-            await ListState.next()
-            await msg.reply('Список знайдено. Вписуйте назви предметів (можна неповну назву, як при пошуку предмета в боті)')
-        else:
-            await state.finish()
-
-async def set_shop_owner_id_handler(msg: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data['items'] = msg.text
-    await ListState.next()
-    await msg.reply("Введіть назву предмета.")
-
-async def set_shop_owner_name_handler(msg: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data['owner_name'] = msg.text
-    async with state.proxy() as data:
-        owner = Owner(data['owner_id'], data['owner_name'])
         try:
-            Shop.create(data['name'], owner.str())
-        except TypeError:
-            await msg.reply("У цього користувача вже є магазин")
+            if data['_class'].name != '':       # назва введена і знайшлася => вводимо предмети
+                if msg.text == '*':
+                    await msg.reply('Список був оновлений')
+                    await state.finish()
+                item_to_add = Item.find_by_name(msg.text)
+                if item_to_add:
+                    data['_class'].items += ';' + item_to_add.name
+                    await msg.reply('Предмет доданий')
+                else:
+                    await msg.reply('Такого предмета немає')
+            if ItemList.find_by_name(data['_class'].name):      # назва введена і шукається
+                data['_class'].name = msg.text
+                await msg.reply('Вписуйте назви предметів (відправте * для завершення)')
+            else:                                              # назва введена, але не знайшлася
+                await msg.reply('Такого списку немає')
+                await state.finish()
+        except:
+            await msg.reply('Такого списку немає')
             await state.finish()
-    await msg.reply("Магазин доданий")
-    await state.finish()
+
+@check_admin_decorator
+async def create_list_handler(msg: types.Message):
+    list_name = msg.text.split(' ')[2:]
+    list_name = ' '.join(list_name)
+
+    if len(list_name) < 3:
+        await msg.reply('Назва списку повинна бути більше 2 літер')
+        return
+    
+    item_list = ItemList(list_name)
+    item_list.insert_to_db()
+
+@check_admin_decorator
+async def remove_list_handler(msg: types.Message):
+    list_name = msg.text.split(' ')[2:]
+    list_name = ' '.join(list_name)
+
+    item_list = ItemList.find_by_name(list_name=list_name, ratio=0.8)
+    item_list.delete()
 
 def register_admin_handlers(dp: Dispatcher):
     dp.register_message_handler(all_lists_handler, Text(equals='списки', ignore_case=True))
     dp.register_message_handler(add_item_to_list_handler, Text(startswith='+список', ignore_case=True))
-    dp.register_message_handler(remove_item_into_list_handler, Text(startswith='-список', ignore_case=True))
+    dp.register_message_handler(set_adding_items_to_list_handler, state=ListState._class)
+    #dp.register_message_handler(remove_item_into_list_handler, Text(startswith='-список', ignore_case=True))
     dp.register_message_handler(create_list_handler, Text(startswith='створити список', ignore_case=True))
     dp.register_message_handler(remove_list_handler, Text(startswith='видалити список', ignore_case=True))
 
